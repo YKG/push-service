@@ -1,18 +1,35 @@
 const WebSocket = require('ws');
+const uuidv1 = require('uuid/v1');
+const Redis = require("redis"),
+    redis = Redis.createClient();
 const http = require('http');
 const fs = require('fs');
 
+const {promisify} = require('util');
+const getAsync = promisify(redis.get).bind(redis);
+const smembersAsync = promisify(redis.smembers).bind(redis);
+
+redis.on("error", function (err) {
+    console.log("Error " + err);
+});
+
 const wss = new WebSocket.Server({ port: 2080 });
 const mq = new WebSocket('ws://127.0.0.1:2081');
-
-function auth(msg) {
-    return true;
-}
 
 const Util = {
     getUserInfo: function (msg) {
         msg = JSON.parse(msg);
         return msg.user;
+    },
+    isAuth: function (msg) {
+        msg = JSON.parse(msg);
+        return msg.type === 'auth';
+    },
+    uuid: function () {
+        return uuidv1();
+    },
+    hash: function(ws) {
+        return 
     }
 }
 
@@ -23,108 +40,91 @@ const DB = {
     }
 }
 
-const Redis = {
-    kv: {},
-    get: function(key) {
-        // Redis.get
-        console.log('::Redis.get ');
-        return Redis.kv[key];
-    },
-    put: function(k, v) {
-        // Redis.put
-        console.log('::Redis.put ');
-        Redis.kv[k] = v;
-    },
-    remove: function(k) {
-        delete Redis.kv[k];
-    }
-};
+const Conntions = {};
 
 const Registry = {
-    register: function(userInfo, ws) {
-        console.log(new Date().toISOString() + ' Register: ' + JSON.stringify(userInfo));
-        
-        let list = Redis.get(userInfo.userId);
-        list = list ? list : new Set();
-        list.add(ws);
-        Redis.put(userInfo.userId, list);
-
-        Redis.put(ws, userInfo.userId);
+    registerInternal: function(key, ws) {
+        console.log(new Date().toISOString() + ' Register: ' + JSON.stringify(key));
+        Conntions[ws.uuid] = ws;
+        redis.sadd(key, ws.uuid);
         ws.send('registered');
     },
+    register: function(userInfo, ws) {
+        this.registerInternal('u_' + userInfo.userId, ws);
+    },
+    registerAnonymous: function(ws) {
+        this.registerInternal('anonymous', ws);
+    },
     delete: function(ws) {
-        const userId = Redis.remove(ws);
-        let list = Redis.get(userId);
-        if (list) {
-            list.delete(ws);
-            Redis.put(userInfo.userId, list);
-        }
+        getAsync(ws.uuid + ':user').then(function(res) {
+            redis.srem(res, ws.uuid);
+            redis.del(ws.uuid + ':user');
+        }).catch((error) => {
+            console.log(error);
+        });
     },
-    findConnByUserId: function(userId) {
+    findConnByUserId: function(userId, callback) {
         console.log('::findConnByUserId ', userId);
-        return Redis.get(userId);
+        smembersAsync('u_' + userId).then(callback).catch((error) => {
+            console.log(error);
+        });
     },
-    findConnByTopic: function(topic) {
-        let list = Redis.get(topic);
-        if (list === null) {
-            DB.get(topic, function(users) {
-                list = [];
-                users.forEach(user => {
-                    list.addAll(findConnByUserId());
-                })
-                Redis.put(topic, list);
-            });
-            
-        }
-        return list;
+    findConnByTopic: function(topic, callback) {
+        smembersAsync(topic + ':topic').then(function(res){
+            if (set === null) {
+                DB.get(topic, function(users) {
+                    users.forEach(userId => {
+                        Registry.findConnByUserId(userId, callback);
+                    });
+                    Registry.sunionstore(topic + ':topic', users);
+                });
+            } else {
+                res.forEach(userId => {
+                    Registry.findConnByUserId(userId, callback);
+                });
+            }
+        }).catch((error) => {
+            console.log(error);
+        });
     },
-    getRouter: function(msg) {
+    getRouter: function(json, callback) {
         const routerFunc = {
             user: function(msg) {
-                return Registry.findConnByUserId(msg.userId);
+                // debugger
+                Registry.findConnByUserId(msg.userId, callback);
             },
             topic: function(msg) {
-                return Registry.findConnByTopic(msg.topic);
+                Registry.findConnByTopic(msg.topic, callback);
             }
         };
-        msg = JSON.parse(msg);
-        const list = routerFunc[msg.type](msg);
-        console.log('::getRouter ' + msg.type, JSON.stringify(msg), list.size);
-        return list ? list : new Set();
+        let msg = JSON.parse(json);
+        routerFunc[msg.type](msg, callback);
     }
 }
 // ----------------------------------------------------------------
 
 mq.on('message', function incoming(message) {
-    const list = Registry.getRouter(message);
-    list.forEach(ws => {
-        if (ws.readyState === 3) {
-            Registry.delete(ws);
-        } else if (ws.readyState === 1) {
-            ws.send(message);
-        }
+    Registry.getRouter(message, function(set) {
+        console.log('send: ', set)
+        if (!set) return;
+        set.forEach(ws => {
+            if (ws.readyState === 3) {
+                Registry.delete(ws);
+            } else if (ws.readyState === 1) {
+                ws.send(message);
+            }
+        });
     });
 });
 
 // ----------------------------------------------------------------
 
-function unused() {
-    let t;
-    function notify() {
-        if (ws.readyState === 1) {
-            ws.send(new Date().toISOString());
-        } else if (ws.readyState === 3) {
-            clearInterval(t);
-        }
-    }
-    t = setInterval(notify, 300);
-}
-
 wss.on('connection', function connection(ws) {
     console.log(new Date().toISOString() + ' new conn: ');
-
+    ws.uuid = Util.uuid();
+    Registry.registerAnonymous(ws);
     ws.on('message', function incoming(message) {
-        if (auth(message)) {
+        if (Util.isAuth(message)) {
             const userInfo = Util.getUserInfo(message);
             Registry.register(userInfo, ws);
         }
@@ -134,6 +134,10 @@ wss.on('connection', function connection(ws) {
     ws.on('close', function incoming(message) {
         Registry.delete(ws);
     });
+
+    ws.on('error', function incoming(message) {
+        Registry.delete(ws);
+    });
 });
 
 // ----------------------------------------------------------------
@@ -141,11 +145,11 @@ http.createServer(function (request, response) {
     if (request.method === 'POST' && request.url === '/') {
         let body = [];
         request.on('data', (chunk) => {
-        body.push(chunk);
+            body.push(chunk);
         }).on('end', () => {
-        body = Buffer.concat(body).toString();
-        // sync(body);
-        response.end(body);
+            body = Buffer.concat(body).toString();
+            // sync(body);
+            response.end(body);
         });
     } else {
         response.statusCode = 404;
