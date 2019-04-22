@@ -13,9 +13,18 @@ redis.on("error", function (err) {
     console.log("Error " + err);
 });
 
-const wss = new WebSocket.Server({ port: 2080 });
-const mq = new WebSocket('ws://127.0.0.1:2081');
-const monitor = new WebSocket.Server({ port: 3082 });
+let arr = [];
+for (let i = 0; i < 100; i++) {
+    arr.push(i + 21500);
+}
+const wss = [];
+arr.forEach(p => {
+    let s = new WebSocket.Server({ port: p });
+    wss.push(s);
+})
+
+const mq = new WebSocket('ws://127.0.0.1:29081');
+const monitor = new WebSocket.Server({ port: 29082 });
 
 const Util = {
     getUserInfo: function (msg) {
@@ -120,25 +129,27 @@ mq.on('message', function incoming(message) {
 
 // ----------------------------------------------------------------
 
-wss.on('connection', function connection(ws) {
-    console.log(new Date().toISOString() + ' new conn: ');
-
-    ws.uuid = Util.uuid();
-    Registry.registerAnonymous(ws);
-    ws.on('message', function incoming(message) {
-        if (Util.isAuth(message)) {
-            const userInfo = Util.getUserInfo(message);
-            Registry.register(userInfo, ws);
-        }
-        //console.log('received: %s', message);
-    });
-
-    ws.on('close', function incoming(message) {
-        Registry.delete(ws);
-    });
-
-    ws.on('error', function incoming(message) {
-        Registry.delete(ws);
+wss.forEach(swss => {
+    swss.on('connection', function connection(ws) {
+        console.log(new Date().toISOString() + ' new conn: ');
+    
+        ws.uuid = Util.uuid();
+        Registry.registerAnonymous(ws);
+        ws.on('message', function incoming(message) {
+            if (Util.isAuth(message)) {
+                const userInfo = Util.getUserInfo(message);
+                Registry.register(userInfo, ws);
+            }
+            //console.log('received: %s', message);
+        });
+    
+        ws.on('close', function incoming(message) {
+            Registry.delete(ws);
+        });
+    
+        ws.on('error', function incoming(message) {
+            Registry.delete(ws);
+        });
     });
 });
 
