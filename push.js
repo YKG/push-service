@@ -1,7 +1,8 @@
+const host = '192.168.199.167';
 const WebSocket = require('ws');
 const uuidv1 = require('uuid/v1');
 const Redis = require("redis"),
-    redis = Redis.createClient();
+    redis = Redis.createClient({host: host});
 const http = require('http');
 const fs = require('fs');
 
@@ -14,7 +15,7 @@ redis.on("error", function (err) {
 });
 
 let arr = [];
-for (let i = 0; i < 100; i++) {
+for (let i = 0; i < 2; i++) {
     arr.push(i + 21500);
 }
 const wss = [];
@@ -23,7 +24,7 @@ arr.forEach(p => {
     wss.push(s);
 })
 
-const mq = new WebSocket('ws://127.0.0.1:29081');
+const mq = new WebSocket('ws://' + host + ':29081');
 const monitor = new WebSocket.Server({ port: 29082 });
 
 const Util = {

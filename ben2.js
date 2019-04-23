@@ -22,7 +22,7 @@ function high(port, i, j) {
             // console.log('ws://192.168.199.167:' + port + ' ' + i + " " + j);
             // const ws = new WebSocket('ws://192.168.199.167:' + port);
             // const ws = new WebSocket('ws://ahk.altx.top:' + port, {localAddress: '192.168.199.168'});
-            const ws = new WebSocket('ws://192.168.199.167:' + port);
+            const ws = new WebSocket('ws://ahk.altx.top:' + port, {localAddress: '192.168.199.168'});
     
             ws.onmessage = function(msg){
                 // console.log(msg.data);
@@ -38,7 +38,7 @@ function high(port, i, j) {
                 if (errCnt > 10) {
                     console.log(err);
                     Object.keys(task).forEach(k =>{
-                        clearInterval(task[k]);
+                        // clearInterval(task[k]);
                     });
                 }
                 // console.log('err');
@@ -47,7 +47,7 @@ function high(port, i, j) {
             ws.onopen = function(msg){
                 okCnt++;
                 ccnt[port]++;
-                if (ccnt[port] > 10000) {
+                if (okCnt > 7000) {
                     clearInterval(task[port]);
                 }
                 // n = getNext();
@@ -66,7 +66,7 @@ function high(port, i, j) {
 const base = 21500;
 const ccnt = {};
 const task = {}
-for (let i = 0; i < 2; i++) {
+for (let i = 0; i < 1; i++) {
     let port = base + i;
     ccnt[port] = 0;
     task[port] = setInterval(high(port, i, 0), 1);

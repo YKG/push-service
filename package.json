@@ -1,13 +1,15 @@
 {
-  "name": "docker_web_app",
+  "name": "docker-ws-app",
   "version": "1.0.0",
   "description": "Node.js on Docker",
-  "author": "First Last <first.last@example.com>",
-  "main": "server.js",
+  "author": "Kaige Ye <ye@kaige.org>",
+  "main": "push.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node push.js"
   },
   "dependencies": {
-    "express": "^4.16.1"
+    "redis": "^2.8.0",
+    "uuid": "^3.3.2",
+    "ws": "^6.2.1"
   }
 }
