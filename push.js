@@ -1,190 +1,106 @@
-const host = '192.168.199.167';
 const WebSocket = require('ws');
-const uuidv1 = require('uuid/v1');
-const Redis = require("redis"),
-    redis = Redis.createClient({host: host});
-const http = require('http');
-const fs = require('fs');
 
-const {promisify} = require('util');
-const getAsync = promisify(redis.get).bind(redis);
-const smembersAsync = promisify(redis.smembers).bind(redis);
+const server = new WebSocket.Server({ port: 29080 });
+const mq = new WebSocket('ws://127.0.0.1:29081');
 
-redis.on("error", function (err) {
-    console.log("Error " + err);
-});
+const Clients = {};
+const Users = {};
 
-let arr = [];
-for (let i = 0; i < 2; i++) {
-    arr.push(i + 21500);
+function getUserId(message, callback) {
+    //DB.getUserId(message, callback);
+    callback(message.data.userId);
 }
-const wss = [];
-arr.forEach(p => {
-    let s = new WebSocket.Server({ port: p });
-    wss.push(s);
-})
-
-const mq = new WebSocket('ws://' + host + ':29081');
-const monitor = new WebSocket.Server({ port: 29082 });
 
 const Util = {
-    getUserInfo: function (msg) {
-        msg = JSON.parse(msg);
-        return msg.user;
+    fromJson: function(str) {
+        try {
+            return JSON.parse(str);
+        } catch (e) {
+            console.log(e);
+            return {};
+        }
     },
-    isAuth: function (msg) {
-        msg = JSON.parse(msg);
-        return msg.type === 'auth';
-    },
-    uuid: function () {
-        return uuidv1();
-    },
-    hash: function(ws) {
-        return 
+    toJson: function(obj) {
+        try {
+            return JSON.stringify(obj);
+        } catch (e) {
+            console.log(e);
+            return "(JSON.stringify ERROR)";
+        }
     }
 }
 
-const DB = {
-    get: function(topic, callback) {
-        const users = [];
-        callback(users);
+function cleanup(client) {
+    if (Users[client] !== undefined) {
+        Clients[Users[client]].delete(client);
+        delete Users[client];
     }
 }
 
-const Connections = {};
-
-const Registry = {
-    registerInternal: function(key, ws) {
-        console.log(new Date().toISOString() + ' Register: ' + JSON.stringify(key));
-        ws.userid = key;
-        Connections[ws.uuid] = ws;
-        redis.sadd(key, ws.uuid);
-        ws.send('registered');
-    },
-    register: function(userInfo, ws) {
-        this.registerInternal('u_' + userInfo.userId, ws);
-    },
-    registerAnonymous: function(ws) {
-        this.registerInternal('anonymous', ws);
-    },
-    delete: function(ws) {
-        redis.srem(ws.userid, ws.uuid);
-        delete Connections[ws.uuid];
-    },
-    findConnByUserId: function(userId, callback) {
-        console.log('::findConnByUserId ', userId);
-        smembersAsync('u_' + userId).then(callback).catch((error) => {
-            console.log(error);
-        });
-    },
-    findConnByTopic: function(topic, callback) {
-        smembersAsync(topic + ':topic').then(function(res){
-            if (set === null) {
-                DB.get(topic, function(users) {
-                    users.forEach(userId => {
-                        Registry.findConnByUserId(userId, callback);
-                    });
-                    Registry.sunionstore(topic + ':topic', users);
-                });
-            } else {
-                res.forEach(userId => {
-                    Registry.findConnByUserId(userId, callback);
-                });
-            }
-        }).catch((error) => {
-            console.log(error);
-        });
-    },
-    getRouter: function(json, callback) {
-        const routerFunc = {
-            user: function(msg) {
-                // debugger
-                Registry.findConnByUserId(msg.userId, callback);
-            },
-            topic: function(msg) {
-                Registry.findConnByTopic(msg.topic, callback);
-            }
-        };
-        let msg = JSON.parse(json);
-        routerFunc[msg.type](msg, callback);
+function auth(message, client) {
+    console.log('auth msg: ', Util.toJson(message));
+    if (Users[client] !== undefined) {
+        client.send('ERR: re-Auth');
+        client.close();
+        return;
     }
-}
-// ----------------------------------------------------------------
-
-mq.on('message', function incoming(message) {
-    Registry.getRouter(message, function(set) {
-        console.log('send: ', set)
-        if (!set) return;
-        set.forEach(uuid => {
-            const ws = Connections[uuid];
-            if (!ws) return;
-            if (ws.readyState === 3) {
-                Registry.delete(ws);
-            } else if (ws.readyState === 1) {
-                ws.send(message);
-                console.log('sending... ' + ws.uuid + ' ' + message);
+    getUserId(message, function(userId){
+        if (userId !== null) {
+            if (Clients[userId] === undefined) {
+                Clients[userId] = new Set();
             }
-        });
+            Clients[userId].add(client);
+            Users[client] = userId;
+        } else {
+            client.close();
+        }
     });
+}
+
+server.on('connection', function incoming(client) {
+    console.log(new Date().toISOString() + ' new conn: ');
+
+    client.on('error', function(err) {
+        console.log(new Date().toISOString() + ' close conn: ' + err);
+    });
+    client.on('close', function(msg) {
+        console.log(new Date().toISOString() + ' close conn: ' + msg);
+        cleanup(client);
+    });
+    client.on('message', function(message) {
+        message = Util.fromJson(message);
+        message.type === 'auth' ? auth(message, client) : client.close();
+    })
 });
 
-// ----------------------------------------------------------------
-
-wss.forEach(swss => {
-    swss.on('connection', function connection(ws) {
-        console.log(new Date().toISOString() + ' new conn: ');
-    
-        ws.uuid = Util.uuid();
-        Registry.registerAnonymous(ws);
-        ws.on('message', function incoming(message) {
-            if (Util.isAuth(message)) {
-                const userInfo = Util.getUserInfo(message);
-                Registry.register(userInfo, ws);
-            }
-            //console.log('received: %s', message);
-        });
-    
-        ws.on('close', function incoming(message) {
-            Registry.delete(ws);
-        });
-    
-        ws.on('error', function incoming(message) {
-            Registry.delete(ws);
-        });
-    });
-});
-
-// ----------------------------------------------------------------
-http.createServer(function (request, response) {
-    if (request.method === 'POST' && request.url === '/') {
-        let body = [];
-        request.on('data', (chunk) => {
-            body.push(chunk);
-        }).on('end', () => {
-            body = Buffer.concat(body).toString();
-            // sync(body);
-            response.end(body);
-        });
+// msg strcucture
+// 
+// {
+//     type: 'user',
+//     data: {
+//         userId: 12345
+//         msg: 'hello'
+//         ts: 1556005966716
+//     }
+// }
+function getClients(message) {
+    if (message.type === 'user') {
+        let clients = Clients[message.data.userId];
+        if (clients instanceof Set) return clients;
     } else {
-        response.statusCode = 404;
-        response.end();
+        console.error('Unimplemented message.type: ', message.type);
     }
-}).listen(20078);
-
-// 终端打印如下信息
-console.log('Server running at http://127.0.0.1:20078/');
-
-// ----------------------------------------------------------------
-
-function report() {
-    monitor.clients.forEach(function(ws){
-        //Object.keys(Connections).length
-        ws.send(Object.keys(Connections).length);
-    });
-    console.log('report' + new Date().toISOString());
+    return new Set();
 }
-setInterval(report, 1000);
 
-monitor.on('connection', function connection(ws) {
-    console.log(new Date().toISOString() + '22222 new conn: ');
-});
+mq.on('message', function(message) {
+    // console.log(new Date().toISOString() + ' mq msg: ' + message + " clients.size " + server.clients.size);
+    message = Util.fromJson(message);
+    
+    getClients(message).forEach(ws => {
+        if (ws.readyState === 1) {
+            ws.send(Util.toJson(message.data));
+            console.log(new Date().toISOString() + ' send message: ' + JSON.stringify(message.data));
+        }
+    })
+})

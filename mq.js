@@ -15,3 +15,14 @@ mqs.on('connection', function incoming(client) {
         })
     })
 });
+
+function toYKG() {
+    mqs.clients.forEach(ws => {
+        if (ws.readyState === 1) {
+            ws.send(JSON.stringify({type: 'user', data: {userId: "ykg", msg: new Date().toISOString(), ts: Date.now()}}));
+            ws.send(JSON.stringify({type: 'user', data: {userId: "hong", msg: new Date().toISOString(), ts: Date.now()}}));
+            // console.log(new Date().toISOString() + ' toYKG');
+        }
+    })
+}
+setInterval(toYKG, 1000);
