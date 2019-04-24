@@ -6,58 +6,65 @@
         <script type="text/javascript">
             var noSupportMessage = "Your browser cannot support WebSocket!";
             var ws;
+            var mq;
+            var uri = 'ws://127.0.0.1:29079';
+            var config = {
+                uri: 'ws://127.0.0.1:29079'
+            }
+            var cnt = 0;
 
             function appendMessage(message) {
                 $('body').append(message);
             }
 
-            function connectSocketServer() {
-                var support = "MozWebSocket" in window ? 'MozWebSocket' : ("WebSocket" in window ? 'WebSocket' : null);
+            function healthCheck() {
+                if (cnt > 3) return;
+                if (ws && ws.readyState === 3) {
+                    console.log('health check', new Date().toISOString());
+                    connectSocketServer();
+                    // cnt++;
+                }
+            }
 
-                appendMessage("* " + support + "<br/>");
-                if (support == null) {
-                    appendMessage("* " + noSupportMessage + "<br/>");
-                    return;
+            function connectSocketServer() {
+                console.log(new Date().toISOString() + uri);
+                try {
+                    ws = new WebSocket(uri);
+                } catch (e) {
+                    setTimeout(healthCheck, 5000);
                 }
 
-                appendMessage("* Connecting to server ..<br/>");
-                // create a new websocket and connect
-                ws = new window[support]('ws://127.0.0.1:29080');
-                
-                //ws.binaryType = "arraybuffer";
-
-                // when data is comming from the server, this metod is called
                 ws.onmessage = function (evt) {
+                    // console.log(JSON.stringify(Object.keys(evt)));
                     if (evt.data) {
-                        //drawImage(evt.data);
-                        //drawToCanvas(evt.data);
                         $("#msg").text(evt.data);
-                        // updateImg();
+                        const payload = JSON.parse(evt.data);
+                        if (payload.type === 'redirect') {
+                            uri = payload.data.uri;
+                            // ws = new WebSocket(uri);
+                            // ws.close();
+                            // appendMessage('* ' + ws.url +' Connection closed. reconn<br/>');
+                            // connectSocketServer();
+                            setTimeout(connectSocketServer);
+                            // ws = new WebSocket(uri);
+
+                        }
                     }
                 };
 
-                // when the connection is established, this method is called
                 ws.onopen = function () {
-                    appendMessage('* Connection open<br/>');
-                    // $('#messageInput').attr("disabled", "");
-                    $('#sendButton').attr("disabled", "");
-                    $('#connectButton').attr("disabled", "disabled");
-                    $('#disconnectButton').attr("disabled", "");
+                    appendMessage(new Date().toISOString() + ' * ' + ws.url +' Connection open<br/>');
                     sendAuthInfo();
                 };
 
-                // when the connection is closed, this method is called
                 ws.onclose = function () {
-                    appendMessage('* Connection closed<br/>');
-                    // $('#messageInput').attr("disabled", "disabled");
-                    $('#sendButton').attr("disabled", "disabled");
-                    $('#connectButton').attr("disabled", "");
-                    $('#disconnectButton').attr("disabled", "disabled");
+                    appendMessage(new Date().toISOString() + ' * ' + ws.url +' Connection closed. reconn<br/>');
+                    setTimeout(healthCheck, 5000);
                 }
             }
 
             function sendAuthInfo() {
-                if (ws) {
+                if (ws && ws.readyState === 1) {
                     var messageBox = $('#messageInput');
                     const id = messageBox.val();
                     const payload = {type: 'auth', data: {userId: id, ts: Date.now()}};
@@ -65,8 +72,13 @@
                 }
             }
 
-            function sendMessage() {
-                sendAuthInfo();
+            function SendMsgToMQ() {
+                if (!mq) {
+                    connectMQServer();
+                }
+                setTimeout(function(){
+                        mq.send($('#tomq').val());
+                    }, 300);
             }
 
             function disconnectWebSocket() {
@@ -75,90 +87,44 @@
                 }
             }
 
-            function connectWebSocket() {
-                connectSocketServer();
+            function connectMQServer() {
+                if (!mq) {
+                    mq = new WebSocket('ws://127.0.0.1:25673');
+
+                    mq.onmessage = function (evt) {
+                        if (evt.data) {
+                            $("#msg").text(evt.data);
+                        }
+                    };
+
+                    mq.onopen = function () {
+                        appendMessage('* mq  open<br/>');
+                    };
+
+                    mq.onclose = function () {
+                        appendMessage('* mq closed. reconn<br/>');
+                        setTimeout(connectMQServer, 1000);
+                    }
+                }
             }
 
             window.onload = function () {
-                // $('#messageInput').attr("disabled", "disabled");
-                $('#sendButton').attr("disabled", "disabled");
-                $('#disconnectButton').attr("disabled", "disabled");
+                connectSocketServer();
             }
-
-            function binaryToDataURL2(inputArray){
-                console.log(new Uint8Array(inputArray).length);
-                var blob = new Blob(new Uint8Array(inputArray), {'type' : 'image/gif'});
-                return URL.createObjectURL(blob);
-            }
-
-            function binaryToDataURL(inputArray){
-                //var base64 = btoa(String.fromCharCode.apply(null, inputArray));
-                var base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(inputArray)));
-                var uri = 'data:image/gif;base64,' + base64;
-                return uri;
-            }
-
-            function drawToCanvas(binaryArray){
-                var canvas = document.createElement('canvas');
-                var context = canvas.getContext('2d');
-                var img = new Image();
-                img.onload = function(){
-                    context.drawImage(img, 0, 0);
-                };
-                img.onerror = function(e){
-                    console.log('Error during loading image:', e);
-                };
-                img.src = binaryToDataURL2(binaryArray);
-
-                var div = document.getElementById('img');
-                div.appendChild(img);
-            }
-
-            function drawImage(data) {
-                var imageWidth = 73, imageHeight = 73; // hardcoded width & height. 
-                var byteArray = new Uint8Array(data);
-
-                var canvas = document.createElement('canvas');
-                canvas.width = imageWidth;
-                canvas.height = imageHeight;
-                var ctx = canvas.getContext('2d');
-
-                var imageData = ctx.getImageData(0, 0, imageWidth, imageHeight); // total size: imageWidth * imageHeight * 4; color format BGRA
-                var dataLen = imageData.data.length;
-                for (var i = 0; i < dataLen; i++)
-                {
-                    imageData.data[i] = byteArray[i];
-                }
-                ctx.putImageData(imageData, 0, 0);
-
-                // create a new element and add it to div
-                var image = document.createElement('img');
-                image.width = imageWidth;
-                image.height = imageHeight;
-                image.src = canvas.toDataURL();
-
-                var div = document.getElementById('img');
-                div.appendChild(image);
-            }
-
-            function updateImg() {
-                var image = document.getElementById('myimg');
-                image.src = "http://ahk.altx.top/img.gif?rnd=" + Math.random();
-
-                //var div = document.getElementById('img');
-                //div.appendChild(image);
-            }
-    
     </script>
     </head>
     <body>
-        <input type="button" id="connectButton" value="Connect" onclick="connectWebSocket()"/> 
-        <input type="button" id="disconnectButton" value="Disconnect" onclick="disconnectWebSocket()"/> 
-        <input type="text" id="messageInput" value="ykg" /> 
-        <input type="button" id="sendButton" value="Load Remote Image" onclick="sendMessage()"/> <br />
-        <div id="msg"></div>
-        <div id="img">
-            <img id='myimg' src="http://ahk.altx.top/img.gif" alt="">
+        <div>
+            <input type="button" id="connectButton" value="Connect" onclick="connectSocketServer()"/> 
+            <input type="button" id="disconnectButton" value="Disconnect" onclick="disconnectWebSocket()"/> 
+            <input type="text" id="messageInput" value="1002" /> 
+            <input type="button" id="sendButton" value="SendAuthInfo" onclick="sendAuthInfo()"/> <br />
+            <input type="button" id="sendButton" value="SendMsgToMQ" onclick="SendMsgToMQ()"/> <br />
+            <textarea name="" id="tomq" cols="30" rows="10"></textarea>
+            <div id="msg"></div>
         </div>
+        
+        <hr>
+
     </body>
 </html>
