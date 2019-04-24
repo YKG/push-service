@@ -17,14 +17,18 @@ mqs.on('connection', function incoming(client) {
     client.on('message', function(msg) {
         message = Util.fromJson(msg);
         if (message.type === 'register-push-client') { // MQ <--- push client
-            Clients[message.data.hash % NClient] = client;
+            let index = message.data.hash % NClient;
+            Clients[index] = client;
             client.on('message', function(){});
+            client.on('close', function(){
+                Clients[index] = dummyClient;
+            });
             console.log(new Date().toISOString() + ' msg: ' + msg + " clients.size " + mqs.clients.size);
         } else {  // msg source ---> MQ
             try {
                 Clients[message.data.userId % NClient].send(msg);
             } catch (e) {
-                console.log(Util.toJson(Object.keys(Clients)), e);
+                console.log(Util.toJson(Object.keys(Clients)), e.message);
             }
         }
     });
