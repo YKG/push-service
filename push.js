@@ -1,83 +1,67 @@
 const WebSocket = require('ws');
+const Util = require('./Util');
+const Config = require('./Config');
 
 const hash = process.argv[2];
-const listen = hash === 'anonymous' ? 29079 : (29080 + parseInt(hash));
-console.log(listen);
+const listen = Config.ports[hash];
 const server = new WebSocket.Server({ port: listen });
-const mq = new WebSocket('ws://127.0.0.1:25673');
+const mq = new WebSocket(Config.mq.url);
 
 const Clients = {};
-const Users = {};
+const EMPTYSET = new Set();
 
-function getUserId(message, callback) {
-    //DB.getUserId(message, callback);
-    callback(message.data.userId);
-}
-
-const Util = {
-    fromJson: function(str) {
-        try {
-            return JSON.parse(str);
-        } catch (e) {
-            console.log(e);
-            return {};
-        }
-    },
-    toJson: function(obj) {
-        try {
-            return JSON.stringify(obj);
-        } catch (e) {
-            console.log(e);
-            return "(JSON.stringify ERROR)";
-        }
-    }
+function getUserId(message, register) {
+    //DB.getUserId(message, callback); // TODO user/pass cookie
+    register(message.data.userId);
 }
 
 function cleanup(client) {
-    if (Users[client] !== undefined) {
-        Clients[Users[client]].delete(client);
-        delete Users[client];
+    if (client && client.userId !== undefined && Clients[client.userId]) {
+        Clients[client.userId].delete(client);
     }
 }
 
 function redirect(userId, client) {
-    const port = userId === 'anonymous' ? 29079 : (29080 + parseInt(userId % 2));
-    const uri = 'ws://127.0.0.1:' + port;
-    client.send(Util.toJson({type: 'redirect', data: {uri: uri}}));
+    const url = Config.urls[Util.hash(userId)];
+    client.send(Util.toJson({type: 'redirect', data: {url: url}}));
     client.close();
+}
+
+function needRedirect(userId) {
+    return hash !== Util.hash(userId);
+}
+
+function addClient(userId, client) {
+    if (Clients[userId] === undefined) {
+        Clients[userId] = new Set();
+    }
+    Clients[userId].add(client);
+    client.userId = userId;
+}
+
+function register(userId, client) {
+    if (userId === null) {
+        client.close();
+    } else {
+        if (needRedirect(userId)) {
+            redirect(userId, client);
+        } else {
+            addClient(userId, client);
+            console.log(Util.toJson(Clients));
+        }
+    }
 }
 
 function auth(message, client) {
     console.log('auth msg: ', Util.toJson(message));
-    if (Users[client] !== undefined) {
-        client.send('ERR: re-Auth');
+    if (client && client.userId && client.userId !== 'anonymous') {
+        client.send(Util.toJson({error: { message: 're-Auth'}}));
         client.close();
         return;
     }
-    getUserId(message, function(userId){
-        if (userId !== 'anonymous' && (userId % 2) + "" !== hash) {
-            redirect(userId, client);
-            return;
-        }
-
-        if (userId === 'anonymous') {
-            if (userId !== hash) {
-                redirect(userId, client);
-                return;
-            }
-        }
-
-        if (userId !== null) {
-            if (Clients[userId] === undefined) {
-                Clients[userId] = new Set();
-            }
-            Clients[userId].add(client);
-            Users[client] = userId;
-
-            console.log(Util.toJson(Clients));
-        } else {
-            client.close();
-        }
+    
+    getUserId(message, function(userId) {
+        register(userId, client);
     });
 }
 
@@ -91,10 +75,16 @@ server.on('connection', function incoming(client) {
         console.log(new Date().toISOString() + ' close conn: ' + msg);
         cleanup(client);
     });
-    client.on('message', function(message) {
-        message = Util.fromJson(message);
+    client.on('message', function(msg) {
+        let message = Util.fromJson(msg);
         message.type === 'auth' ? auth(message, client) : client.close();
-    })
+    });
+
+    setTimeout(function() {
+        if (client && client.userId === undefined) { // anonymous
+            register('anonymous', client);
+        }
+    }, 5000);
 });
 
 // msg strcucture
@@ -110,29 +100,30 @@ server.on('connection', function incoming(client) {
 function getClients(message) {
     if (message.type === 'direct') {
         let clients = Clients[message.data.userId];
-        console.log(Util.toJson(Clients));
-        console.log('clients: ', message.data.userId, JSON.stringify(clients));
+        console.log('clients: ', message.data.userId, clients && JSON.stringify(clients.size));
         if (clients instanceof Set) return clients;
     } else {
         console.error('Unimplemented message.type: ', message.type);
     }
-    return new Set();
+    return EMPTYSET;
 }
 
 mq.on('open', function() {
-    message = {type: 'register-push-client', data: {remainder: hash}};
+    message = {type: 'register-push-client', data: {hash: hash}};
     mq.send(Util.toJson(message));
     console.log(new Date().toISOString() + ' send message: ' + JSON.stringify(message));
 });
 
-mq.on('message', function(message) {
-    console.log(new Date().toISOString() + ' mq msg: ' + message + " clients.size " + server.clients.size);
-    message = Util.fromJson(message);
-    
+mq.on('message', function(msg) {
+    console.log(new Date().toISOString() + ' mq msg: ' + msg + " clients.size " + server.clients.size);
+    let message = Util.fromJson(msg);
+    let payload = Util.toJson(message.data);
     getClients(message).forEach(ws => {
         if (ws.readyState === 1) {
-            ws.send(Util.toJson(message.data));
-            console.log(new Date().toISOString() + ' send message: ' + JSON.stringify(message.data));
+            ws.send(payload);
+            console.log(new Date().toISOString() + ' send message: ' + payload);
         }
     })
 });
+
+console.log('server listen: ', listen);

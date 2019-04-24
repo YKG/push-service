@@ -4,13 +4,14 @@
         <title>Test</title>
         <script type="text/javascript" src="jquery.js"></script>
         <script type="text/javascript">
+            const config = {
+                defaultUrl: 'ws://127.0.0.1:29079'
+            }
             var noSupportMessage = "Your browser cannot support WebSocket!";
             var ws;
             var mq;
-            var uri = 'ws://127.0.0.1:29079';
-            var config = {
-                uri: 'ws://127.0.0.1:29079'
-            }
+            var url = localStorage.getItem('url') || config.defaultUrl;
+            
             var cnt = 0;
 
             function appendMessage(message) {
@@ -27,9 +28,9 @@
             }
 
             function connectSocketServer() {
-                console.log(new Date().toISOString() + uri);
+                console.log(new Date().toISOString() + url);
                 try {
-                    ws = new WebSocket(uri);
+                    ws = new WebSocket(url);
                 } catch (e) {
                     setTimeout(healthCheck, 5000);
                 }
@@ -40,13 +41,16 @@
                         $("#msg").text(evt.data);
                         const payload = JSON.parse(evt.data);
                         if (payload.type === 'redirect') {
-                            uri = payload.data.uri;
-                            // ws = new WebSocket(uri);
+                            if (url !== payload.data.url) {
+                                url = payload.data.url;
+                                localStorage.setItem('url', url);
+                                setTimeout(connectSocketServer);
+                            }
+                            // ws = new WebSocket(url);
                             // ws.close();
                             // appendMessage('* ' + ws.url +' Connection closed. reconn<br/>');
                             // connectSocketServer();
-                            setTimeout(connectSocketServer);
-                            // ws = new WebSocket(uri);
+                            // ws = new WebSocket(url);
 
                         }
                     }
@@ -58,7 +62,7 @@
                 };
 
                 ws.onclose = function () {
-                    appendMessage(new Date().toISOString() + ' * ' + ws.url +' Connection closed. reconn<br/>');
+                    appendMessage(new Date().toISOString() + ' * ' + ws.url +' Connection closed.<br/>');
                     setTimeout(healthCheck, 5000);
                 }
             }

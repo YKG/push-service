@@ -15,6 +15,10 @@ const Util = {
             console.log(e);
             return "(JSON.stringify ERROR)";
         }
+    },
+    hash: function(userId) {
+        if (userId === 'anonymous') return 'anonymous';
+        return '' + userId % 2;
     }
 }
 
