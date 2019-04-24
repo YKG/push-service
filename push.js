@@ -23,8 +23,14 @@ function cleanup(client) {
 
 function redirect(userId, client) {
     const url = Config.urls[Util.hash(userId)];
-    client.send(Util.toJson({type: 'redirect', data: {url: url}}));
-    client.close();
+    console.log(new Date().toISOString() + ' >>>>>>>>>: ' + Util.toJson({type: 'redirect', data: {url: url}}));
+    // client.on('message', function(){});
+    try {
+        client.send(Util.toJson({type: 'redirect', data: {url: url}}));
+        client.close();
+    } catch (e) {
+        console.error(new Date().toISOString() + e);
+    }
 }
 
 function needRedirect(userId) {
@@ -81,7 +87,7 @@ server.on('connection', function incoming(client) {
     });
 
     setTimeout(function() {
-        if (client && client.userId === undefined) { // anonymous
+        if (client && client.readyState === 1 && client.userId === undefined) { // anonymous
             register('anonymous', client);
         }
     }, 5000);
@@ -100,7 +106,7 @@ server.on('connection', function incoming(client) {
 function getClients(message) {
     if (message.type === 'direct') {
         let clients = Clients[message.data.userId];
-        console.log('clients: ', message.data.userId, clients && JSON.stringify(clients.size));
+        console.log('Clients[', message.data.userId, '].size', clients && JSON.stringify(clients.size));
         if (clients instanceof Set) return clients;
     } else {
         console.error('Unimplemented message.type: ', message.type);
@@ -111,17 +117,17 @@ function getClients(message) {
 mq.on('open', function() {
     message = {type: 'register-push-client', data: {hash: hash}};
     mq.send(Util.toJson(message));
-    console.log(new Date().toISOString() + ' send message: ' + JSON.stringify(message));
+    console.log(new Date().toISOString() + ' [MQ] >>>>: ' + JSON.stringify(message));
 });
 
 mq.on('message', function(msg) {
-    console.log(new Date().toISOString() + ' mq msg: ' + msg + " clients.size " + server.clients.size);
+    console.log(new Date().toISOString() + ' [MQ] <<<<: ' + msg + ' ' + server.clients.size);
     let message = Util.fromJson(msg);
     let payload = Util.toJson(message.data);
     getClients(message).forEach(ws => {
         if (ws.readyState === 1) {
             ws.send(payload);
-            console.log(new Date().toISOString() + ' send message: ' + payload);
+            console.log(new Date().toISOString() + ' >>>>>>>>>: ' + payload);
         }
     })
 });

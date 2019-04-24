@@ -18,7 +18,8 @@ const Util = {
     },
     hash: function(userId) {
         if (userId === 'anonymous') return 'anonymous';
-        return '' + userId % 2;
+        if (Number.isInteger(userId % 2)) return '' + userId % 2;
+        return 'anonymous';
     }
 }
 
