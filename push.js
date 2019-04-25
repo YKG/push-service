@@ -12,8 +12,12 @@ const Clients = {};
 const EMPTYSET = new Set();
 
 function getUserId(message, register) {
-    //DB.getUserId(message, callback); // TODO user/pass cookie
-    register(message.data.userId);
+    //rest.getUserId(message, callback); // TODO user/pass cookie
+    if (message && message.data && message.data.userId && message.data.userId > 1000) {
+        register(message.data.userId);
+    } else {
+        register(null); // fake auth failed
+    }
 }
 
 function cleanup(client) {
