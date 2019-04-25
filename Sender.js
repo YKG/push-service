@@ -41,15 +41,16 @@ function createChunkBuffer(ws) {
     const fileId = ws.userId + '_' + uuid();
     const bufStream = fs.createWriteStream('out/' + fileId);
     bufStream.on('finish', function(){
-        console.log(new Date().toISOString() + ' ======= [multi-chunk] ' + fileId);
-        ws.send(Util.toJson({type: 'multi-chunk', data: {url: fileId, fileId: fileId}}));
+        const payload = Util.toJson({type: 'multi-chunk', data: {url: fileId, fileId: fileId}});
+        console.log(new Date().toISOString() + ' =========== [multi-chunk] ' + payload + '\n');
+        ws.send(payload);
     });
     ws.bufStream = bufStream;
 }
 
 function bufferChunk(stream, message) {
     const msg = Util.toJson(message);
-    console.log(new Date().toISOString() + '       . [   buf] ' + msg);
+    console.log(new Date().toISOString() + '          . [   buf] ' + msg);
     stream.write(msg);
 }
 
@@ -59,12 +60,12 @@ function sendMultiChunk(i, ws) {
 
         if (needUpgradeBuffer(ws)) {
             if ((i + 1) === Fib.length) i--;
-            console.log(new Date().toISOString() + ' ******* [Upgrade]^^^^ size: ' + Fib[i + 1]);
+            console.log(new Date().toISOString() + ' ********** [Upgrade]^^^^ size: ' + Fib[i + 1]);
             createChunkBuffer(ws);
             setTimeout(sendMultiChunk(i + 1, ws), minutes(i + 1));
         } else {
             if (i > 1) {
-                console.log(new Date().toISOString() + ' ******* [Degrade].... size: ' + Fib[i - 1]);
+                console.log(new Date().toISOString() + ' ********** [Degrade].... size: ' + Fib[i - 1]);
                 createChunkBuffer(ws);
                 setTimeout(sendMultiChunk(i - 1, ws), minutes(i - 1));
             }

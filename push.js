@@ -105,7 +105,7 @@ server.on('connection', function incoming(client) {
 //     }
 // }
 function getClients(message) {
-    if (message.type === 'direct') {
+    if (message.type === 'direct' || message.type === 'chunk') {
         let clients = Clients[message.data.userId];
         console.log('Clients[', message.data.userId, '].size', clients && JSON.stringify(clients.size));
         if (clients instanceof Set) return clients;
