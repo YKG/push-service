@@ -6,26 +6,16 @@ const uuid = require('uuid/v4');
 const Fib = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 // const Fib = [0, 1, 1, 1, 1, 1, 13, 21, 34, 55, 89];
 
-function shouldStartMerging0(ws) {
-    if (!ws.last3Intervals.moreThan3Msg) return false;
-    const val = ws.last3Intervals.val;
-    if (val[0] + val[1] + val[2] < 15 * 1000) {
-        console.log('******* Buffer....');
-    } else {
-        // console.log(val[0], val[1], val[2]);
-    }
-    return val[0] + val[1] + val[2] < 15 * 1000;
-}
-
 function shouldStartMerging(ws) {
     if (!ws.last3Intervals.moreThan3Msg) return false;
     const val = ws.last3Intervals.val;
-    if (val[0] + val[1] + val[2] < 5 * 1000) {
+    console.log(val[0], val[1], val[2]);    
+    if (val[0] + val[1] + val[2] < 15 * 100) {
         console.log('******* Buffer....');
     } else {
         // console.log(val[0], val[1], val[2]);
     }
-    return val[0] + val[1] + val[2] < 5 * 1000;
+    return val[0] + val[1] + val[2] < 15 * 100;
 }
 
 function updateIntervals(ws) {
@@ -60,7 +50,7 @@ function startStreaming(ws) {
 
 function minutes(i) {
     // return Fib[i + 1] * 60 * 1000;
-    return Fib[i + 1] * 5 * 1000;
+    return Fib[i + 1] * 5 * 100;
 }
 
 function getNFunc(i, ws) {
@@ -69,10 +59,12 @@ function getNFunc(i, ws) {
 
         if (shouldStartMerging(ws)) {
             if (Fib[i] === 89) i--;
+            console.log('**** [Upgrade]^^^^: ' + Fib[i + 1]);
             startStreaming(ws);
             setTimeout(getNFunc(i + 1, ws), minutes(i + 1));
         } else {
             if (i > 1) {
+                console.log('**** [Degrade]____: ' + Fib[i - 1]);
                 startStreaming(ws);
                 setTimeout(getNFunc(i - 1, ws), minutes(i - 1));
             }
@@ -122,6 +114,7 @@ module.exports = Sender;
 
 // -------------- test
 let msgNo = 1;
+let task;
 ws = {
     send: function(msg){
         console.log(new Date().toISOString() + ' > > > > [send ] ' + msg + '\n');
@@ -131,6 +124,13 @@ ws = {
 function gen() {
     Sender.send(ws, {type: 'chunk', data: {msg: 'MSG [[ #' + msgNo + ' ]] ' + new Date().toISOString()}});
     msgNo++;
+
+    if (msgNo === 50) {
+        clearInterval(task);
+        setTimeout(function(){
+            setInterval(gen, 3000);
+        }, 5000);
+    }
 }
 
 // setTimeout(gen, 3000);
@@ -141,4 +141,4 @@ function gen() {
 //     setInterval(gen, 1000);
 // }, 10000);
 
-setInterval(gen, 1000);
+task = setInterval(gen, 100);
