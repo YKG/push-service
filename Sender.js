@@ -3,19 +3,12 @@ const Util = require('./Util');
 const fs = require('fs');
 const uuid = require('uuid/v4');
 
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
 const Fib = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
-// const Fib = [0, 1, 1, 1, 1, 1, 13, 21, 34, 55, 89];
 
-function shouldStartMerging(ws) {
-    if (!ws.last3Intervals.moreThan3Msg) return false;
-    const val = ws.last3Intervals.val;
-    console.log(val[0], val[1], val[2]);    
-    if (val[0] + val[1] + val[2] < 15 * 100) {
-        console.log('******* Buffer....');
-    } else {
-        // console.log(val[0], val[1], val[2]);
-    }
-    return val[0] + val[1] + val[2] < 15 * 100;
+function minutes(i) {
+    return Fib[i] * MINUTE;
 }
 
 function updateIntervals(ws) {
@@ -38,68 +31,64 @@ function updateIntervals(ws) {
     }
 }
 
-function startStreaming(ws) {
+function needUpgradeBuffer(ws) {
+    if (!ws.last3Intervals.moreThan3Msg) return false;
+    const val = ws.last3Intervals.val;
+    return val[0] + val[1] + val[2] < 3 * 5 * SECOND;
+}
+
+function createChunkBuffer(ws) {
     const fileId = ws.userId + '_' + uuid();
-    const bufferstream = fs.createWriteStream('out/' + fileId);
-    bufferstream.on('finish', function(){
+    const bufStream = fs.createWriteStream('out/' + fileId);
+    bufStream.on('finish', function(){
         console.log(new Date().toISOString() + ' ======= [multi-chunk] ' + fileId);
         ws.send(Util.toJson({type: 'multi-chunk', data: {url: fileId, fileId: fileId}}));
     });
-    ws.bufferstream = bufferstream;
+    ws.bufStream = bufStream;
 }
 
-function minutes(i) {
-    // return Fib[i + 1] * 60 * 1000;
-    return Fib[i + 1] * 5 * 100;
+function bufferChunk(stream, message) {
+    const msg = Util.toJson(message);
+    console.log(new Date().toISOString() + '       . [   buf] ' + msg);
+    stream.write(msg);
 }
 
-function getNFunc(i, ws) {
+function sendMultiChunk(i, ws) {
     return function() {
-        const prev = ws.bufferstream;
+        const oldStream = ws.bufStream;
 
-        if (shouldStartMerging(ws)) {
-            if (Fib[i] === 89) i--;
-            console.log('**** [Upgrade]^^^^: ' + Fib[i + 1]);
-            startStreaming(ws);
-            setTimeout(getNFunc(i + 1, ws), minutes(i + 1));
+        if (needUpgradeBuffer(ws)) {
+            if ((i + 1) === Fib.length) i--;
+            console.log(new Date().toISOString() + ' ******* [Upgrade]^^^^ size: ' + Fib[i + 1]);
+            createChunkBuffer(ws);
+            setTimeout(sendMultiChunk(i + 1, ws), minutes(i + 1));
         } else {
             if (i > 1) {
-                console.log('**** [Degrade]____: ' + Fib[i - 1]);
-                startStreaming(ws);
-                setTimeout(getNFunc(i - 1, ws), minutes(i - 1));
+                console.log(new Date().toISOString() + ' ******* [Degrade].... size: ' + Fib[i - 1]);
+                createChunkBuffer(ws);
+                setTimeout(sendMultiChunk(i - 1, ws), minutes(i - 1));
             }
         }
-        prev.end();
+        oldStream.end();
     }
-}
-
-function apppendToSteam(stream, message) {
-    const msg = Util.toJson(message);
-    console.log(new Date().toISOString() + ' ....... [buffer] ' + msg);
-    stream.write(msg);
 }
 
 const Sender = {
     send: function(ws, message) {
         if (message.type === 'chunk') {
-            // console.log(new Date().toISOString() + ' <<<<<<< [chunk] ' + Util.toJson(message));
             updateIntervals(ws);
-            if (ws.bufferstream) {
-                // console.log('writeable: ', ws.bufferstream.writable);
-            }
-            if (ws && ws.bufferstream && ws.bufferstream.writable) {
+            if (ws && ws.bufStream && ws.bufStream.writable) {
                 try {
-                    apppendToSteam(ws.bufferstream, message);
+                    bufferChunk(ws.bufStream, message);
                 } catch (e) {
                     setTimeout(function(){this.send(ws, message)}); // retry
                 }
             } else {
-                if (shouldStartMerging(ws)) {
-                    startStreaming(ws);
+                if (needUpgradeBuffer(ws)) {
+                    createChunkBuffer(ws);
+                    setTimeout(sendMultiChunk(1, ws), minutes(1));
 
-                    setTimeout(getNFunc(1, ws), minutes(1));
-
-                    apppendToSteam(ws.bufferstream, message);
+                    bufferChunk(ws.bufStream, message);
                 } else {
                     ws.send(Util.toJson(message.data));
                 }
@@ -111,34 +100,3 @@ const Sender = {
 }
 
 module.exports = Sender;
-
-// -------------- test
-let msgNo = 1;
-let task;
-ws = {
-    send: function(msg){
-        console.log(new Date().toISOString() + ' > > > > [send ] ' + msg + '\n');
-    },
-    userId: 1001
-}
-function gen() {
-    Sender.send(ws, {type: 'chunk', data: {msg: 'MSG [[ #' + msgNo + ' ]] ' + new Date().toISOString()}});
-    msgNo++;
-
-    if (msgNo === 50) {
-        clearInterval(task);
-        setTimeout(function(){
-            setInterval(gen, 3000);
-        }, 5000);
-    }
-}
-
-// setTimeout(gen, 3000);
-// setTimeout(gen, 6000);
-// setTimeout(gen, 9000);
-
-// setTimeout(function(){
-//     setInterval(gen, 1000);
-// }, 10000);
-
-task = setInterval(gen, 100);

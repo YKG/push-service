@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const Util = require('./Util');
 const Config = require('./Config');
+const Sender = require('./Sender');
 
 const hash = process.argv[2];
 const listen = Config.ports[hash];
@@ -126,7 +127,7 @@ mq.on('message', function(msg) {
     let payload = Util.toJson(message.data);
     getClients(message).forEach(ws => {
         if (ws.readyState === 1) {
-            ws.send(payload);
+            Sender.send(ws, message);
             console.log(new Date().toISOString() + ' >>>>>>>>>: ' + payload);
         }
     })
