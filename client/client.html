@@ -64,7 +64,7 @@
 
                 ws.onclose = function () {
                     appendMessage(new Date().toISOString() + ' * ' + ws.url +' Connection closed.<br/>');
-                    setTimeout(healthCheck, 5000);
+                    // setTimeout(healthCheck, 5000);
                 }
 
                 ws.onerror = function (e) {
@@ -75,7 +75,7 @@
                     }
                     errCount++;
                     appendMessage(new Date().toISOString() + ' * ' + ws.url + JSON.stringify(e) +' Connection error.<br/>');
-                    setTimeout(connectSocketServer, 1000);
+                    setTimeout(connectSocketServer, 5000);
                 }
             }
 

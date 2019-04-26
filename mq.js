@@ -42,5 +42,6 @@ function toYKG() {
     ws.send(JSON.stringify({type: 'direct', data: {userId: 1001, msg: new Date().toISOString(), ts: Date.now()}}));
     ws.send(JSON.stringify({type: 'direct', data: {userId: 1002, msg: new Date().toISOString(), ts: Date.now()}}));
     ws.send(JSON.stringify({type: 'chunk', data: {userId: 1002, msg: '[[chunk]] ' + new Date().toISOString(), ts: Date.now()}}));
+    ws.send(JSON.stringify({type: 'chunk', data: {userId: 1003, msg: '[[chunk]] ' + new Date().toISOString(), ts: Date.now()}}));
 }
 setInterval(toYKG, 3000);

@@ -98,7 +98,7 @@ server.on('connection', function incoming(client) {
     }, 5000);
 });
 
-// msg strcucture
+// msg structure
 // 
 // {
 //     type: 'user',
