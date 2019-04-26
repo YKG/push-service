@@ -11,8 +11,9 @@
     ./stop.sh
     ```
 
-- 不在docker中运行，在本机运行
+- 不在docker中运行，在本机运行，需要node环境
     ```shell
+    npm install ws uuid
     ./start.sh
     ```
 
