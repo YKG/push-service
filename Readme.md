@@ -24,9 +24,9 @@
     
     # Sample:
     #
-    # ./docker-cli.sh 1002
+    # ./docker-cli.sh 1002                   # 用户 1002 的客户端
     #
-    # ./docker-cli.sh
+    # ./docker-cli.s                         # 匿名用户客户端
     ```
 
 - 启动本地客户端
