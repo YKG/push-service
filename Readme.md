@@ -60,6 +60,18 @@
     node mq-cli.js [userId] [msg] [type] [chunkInterval]
     ```
 
+# 文件说明
+
+- `push.js` 推送服务器，接受客户端连接
+- `mq.js`   模拟 MQ
+
+- `Sender.js` 合并消息算法实现
+- `Config.js` 服务器端口配置信息
+- `Util.js`   JSON包装，hash函数
+
+- `cli.js` 客户端
+- `mq-cli.js` 向MQ发消息的客户端
+
 #
 
 - 同一个用户的每个连接都会使用一个独立的缓冲区来缓存chunk
