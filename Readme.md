@@ -77,6 +77,8 @@
 # 设计
 
 ## Big Picture
+
+```
                         +--------------------------+
                         |                          |
                         |                          |
@@ -120,7 +122,7 @@
            v   v   v             v    v               v     v
 
            Clients               Clients              Clients
-
+```
 
 ## 消息合并处理
 
