@@ -50,9 +50,11 @@
     #
     # ./docker-mq-cli.sh 1003 Hello chunk 3  # 每 3s 钟向 1003 用户发送 'Hello' 
     #
-    # ./docker-mq-cli.sh 1004 World chunk    # 每 3s 钟向 1004 用户发送 'World'  
+    # ./docker-mq-cli.sh 1004 World chunk    # 每 2s 钟向 1004 用户发送 'World'  
     # 
     # ./docker-mq-cli.sh 1005                # 向 1005 用户发送默认消息 'Hello World'
+    #
+    # ./docker-mq-cli.sh                     # 向匿名用户发送默认消息 'Hello World'
     ```
 
 - 本地
