@@ -6,7 +6,6 @@ const Sender = require('./Sender');
 const hash = process.argv[2];
 const listen = Config.ports[hash];
 const server = new WebSocket.Server({ port: listen });
-const mq = new WebSocket(Config.mq.url);
 
 const Clients = {};
 const EMPTYSET = new Set();
@@ -119,22 +118,32 @@ function getClients(message) {
     return EMPTYSET;
 }
 
-mq.on('open', function() {
-    message = {type: 'register-push-client', data: {hash: hash}};
-    mq.send(Util.toJson(message));
-    console.log(new Date().toISOString() + ' [MQ] >>>>: ' + JSON.stringify(message));
-});
+function cnnectToMQ() {
+    mq = new WebSocket(Config.mq.url);
 
-mq.on('message', function(msg) {
-    console.log(new Date().toISOString() + ' [MQ] <<<<: ' + msg + ' ' + server.clients.size);
-    let message = Util.fromJson(msg);
-    let payload = Util.toJson(message.data);
-    getClients(message).forEach(ws => {
-        if (ws.readyState === 1) {
-            Sender.send(ws, message);
-            console.log(new Date().toISOString() + ' >>>>>>>>>: ' + payload);
-        }
-    })
-});
+    mq.on('open', function() {
+        message = {type: 'register-push-client', data: {hash: hash}};
+        mq.send(Util.toJson(message));
+        console.log(new Date().toISOString() + ' [MQ] >>>>: [#' + hash + '] ' + JSON.stringify(message));
+    });
+    
+    mq.on('close', function() {
+        console.log(new Date().toISOString() + ' [MQ] xxxx: closed [#' + hash + '] ');
+        setTimeout(cnnectToMQ, 3000);
+    });
+    
+    mq.on('message', function(msg) {
+        console.log(new Date().toISOString() + ' [MQ] <<<<: [#' + hash + '] ' + msg + ' ' + server.clients.size);
+        let message = Util.fromJson(msg);
+        let payload = Util.toJson(message.data);
+        getClients(message).forEach(ws => {
+            if (ws.readyState === 1) {
+                Sender.send(ws, message);
+                console.log(new Date().toISOString() + ' >>>>>>>>>: [#' + hash + '] ' + payload);
+            }
+        })
+    });
+}
+cnnectToMQ();
 
 console.log('server listen: ', listen);
