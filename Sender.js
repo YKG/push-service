@@ -40,9 +40,9 @@ function createChunkBuffer(ws) {
     const fileId = ws.userId + '_' + uuid();
     const bufStream = fs.createWriteStream('out/' + fileId);
     bufStream.on('finish', function(){
-        const payload = Util.toJson({type: 'multi-chunk', data: {url: fileId, fileId: fileId}});
-        console.log(new Date().toISOString() + ' =========== [multi-chunk] ' + payload + '\n');
-        ws.send(payload);
+        const message = {type: 'multi-chunk', data: {url: fileId, fileId: fileId}};
+        console.log(new Date().toISOString() + ' =========== [multi-chunk] ' + Util.toJson(message) + '\n');
+        safeSend(ws, message);
     });
     ws.bufStream = bufStream;
 }
@@ -73,6 +73,16 @@ function sendMultiChunk(i, ws) {
     }
 }
 
+function safeSend(ws, payload) {
+    if (ws && ws.readyState === 1) {
+        try {
+            ws.send(Util.toJson(payload));        
+        } catch (e) {
+            console.log(new Date().toISOString() + ' ********** [Send Message Failed]');
+        }
+    }
+}
+
 const Sender = {
     send: function(ws, message) {
         if (message.type === 'chunk') {
@@ -90,11 +100,11 @@ const Sender = {
 
                     bufferChunk(ws.bufStream, message);
                 } else {
-                    ws.send(Util.toJson(message.data));
+                    safeSend(ws, message.data);
                 }
             }
         } else {
-            ws.send(Util.toJson(message.data));
+            safeSend(ws, message.data);
         }
     }
 }
