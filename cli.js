@@ -3,8 +3,6 @@ const Util = require('./Util');
 const Config = require('./Config');
 
 const userId = process.argv[2] || 'anonymous';
-const mq = new WebSocket(Config.mq.url);
-
 connect(Config.urls.anonymous, userId);
 
 function connect(url, userId) {
@@ -23,7 +21,7 @@ function connect(url, userId) {
     });
     
     client.on('message', function(msg) {
-        console.log(new Date().toISOString() + ' >>>>>>>>>: ' + msg);
+        console.log(new Date().toISOString() + ' <<<<<<<<<: ' + msg);
         if (Util.fromJson(msg).type === 'redirect') {
             connect(Util.fromJson(msg).data.url, userId);
         }

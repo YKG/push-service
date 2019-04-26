@@ -1,4 +1,3 @@
-
 const Util = require('./Util');
 const fs = require('fs');
 const uuid = require('uuid/v4');
