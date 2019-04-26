@@ -1,26 +1,25 @@
 # 如何使用
 
-
 ## 服务端
 - 启动所有服务
-    ```
+    ```shell
     ./run.sh
     ```
 
 - 停止所有服务(docker/本机 都可以)
-    ```
+    ```shell
     ./stop.sh
     ```
 
 - 不在docker中运行，在本机运行
-    ```
+    ```shell
     ./start.sh
     ```
 
 ## 客户端
 
 - 启动客户端（docker）
-    ```
+    ```shell
     ./docker-cli.sh [userId]
     
     # Sample:
@@ -31,12 +30,12 @@
     ```
 
 - 启动本地客户端
-    ```
+    ```shell
     node cli.js [userId]
     ```
 
 - 向mq发消息（docker）
-    ```
+    ```shell
     ./docker-mq-cli.sh [userId] [msg] [type] [chunkInterval]
     
     # type: direct/chunk
@@ -52,11 +51,11 @@
     ```
 
 - 启动本地客户端
-    ```
+    ```shell
     node mq-cli.js [userId] [msg] [type] [chunkInterval]
     ```
 
-- 也可使用 `client\client.html` 通过浏览器访问
+- 也可使用 `client/client.html` 通过浏览器访问
 
 #
 
