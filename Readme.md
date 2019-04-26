@@ -35,7 +35,11 @@
     node cli.js [userId]
     ```
 
-- 向mq发消息（docker）
+- 也可使用 `client/client.html` 通过浏览器访问
+
+## 模拟消息源给 MQ 发消息
+
+- docker
     ```shell
     ./docker-mq-cli.sh [userId] [msg] [type] [chunkInterval]
     
@@ -51,12 +55,10 @@
     # ./docker-mq-cli.sh 1005                # 向 1005 用户发送默认消息 'Hello World'
     ```
 
-- 启动本地客户端
+- 本地
     ```shell
     node mq-cli.js [userId] [msg] [type] [chunkInterval]
     ```
-
-- 也可使用 `client/client.html` 通过浏览器访问
 
 #
 
